@@ -1,0 +1,54 @@
+services:
+  db:
+    image: mariadb:11
+    environment:
+      MARIADB_DATABASE: wp
+      MARIADB_USER: wp
+      MARIADB_PASSWORD: wp
+      MARIADB_ROOT_PASSWORD: root
+    volumes:
+      - db:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  wp:
+    image: wordpress:php8.3-apache
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8088:80"
+    environment:
+      WORDPRESS_DB_HOST: db
+      WORDPRESS_DB_USER: wp
+      WORDPRESS_DB_PASSWORD: wp
+      WORDPRESS_DB_NAME: wp
+      WORDPRESS_DEBUG: "1"
+    volumes:
+      - wp:/var/www/html
+      - ./plugins/flexible-refund-and-return-order-for-woocommerce:/var/www/html/wp-content/plugins/flexible-refund-and-return-order-for-woocommerce
+      - ./plugins/shopmagic-for-woocommerce:/var/www/html/wp-content/plugins/shopmagic-for-woocommerce
+
+  cli:
+    image: wordpress:cli-php8.3
+    depends_on:
+      wp:
+        condition: service_started
+    user: "33:33"
+    environment:
+      WORDPRESS_DB_HOST: db
+      WORDPRESS_DB_USER: wp
+      WORDPRESS_DB_PASSWORD: wp
+      WORDPRESS_DB_NAME: wp
+    volumes:
+      - wp:/var/www/html
+      - ./plugins/flexible-refund-and-return-order-for-woocommerce:/var/www/html/wp-content/plugins/flexible-refund-and-return-order-for-woocommerce
+      - ./plugins/shopmagic-for-woocommerce:/var/www/html/wp-content/plugins/shopmagic-for-woocommerce
+    entrypoint: ["tail","-f","/dev/null"]
+
+volumes:
+  db:
+  wp:

